@@ -8,14 +8,17 @@
 #include <geometry_msgs/TransformStamped.h>
 #include <sensor_msgs/Imu.h>
 #include <cv_bridge/cv_bridge.h>
+#include <apriltags_ros/AprilTagDetectionArray.h>
 
 #include <boost/filesystem.hpp>
 #include <opencv2/core/core.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
 
+
+// Matlab header, this is needed to save mat files
+// Note that we use the FindMatlab.cmake to get this
 #include "mat.h"
-#define BUFSIZE 256
 
 using namespace cv;
 using namespace std;
@@ -70,6 +73,7 @@ int main(int argc, char **argv) {
     vector<double> dataIMU = vector<double>();
     vector<double> dataVICON = vector<double>();
     vector<double> dataODOM = vector<double>();
+    vector<vector<double>> dataAPRIl = vector<vector<double>>();
 
     // Step through the rosbag and send to algo methods
     for (const rosbag::MessageInstance& m : view) {
@@ -86,7 +90,6 @@ int main(int argc, char **argv) {
             dataIMU.push_back(s1->angular_velocity.z);
         }
 
-
         // Handle vicon poses
         geometry_msgs::TransformStamped::ConstPtr s2 = m.instantiate<geometry_msgs::TransformStamped>();
         if (s2 != NULL && m.getTopic() == "/vicon/turtlebot/body") {
@@ -99,7 +102,6 @@ int main(int argc, char **argv) {
             dataVICON.push_back(s2->transform.translation.y);
             dataVICON.push_back(s2->transform.translation.z);
         }
-
 
         // Handle turtlebot odomentry
         nav_msgs::Odometry::ConstPtr s3 = m.instantiate<nav_msgs::Odometry>();
@@ -120,10 +122,31 @@ int main(int argc, char **argv) {
             dataODOM.push_back(s3->twist.twist.linear.z);
         }
 
-
+        // Handle turtlebot apriltag_ros detections
+        apriltags_ros::AprilTagDetectionArray::ConstPtr s4 = m.instantiate<apriltags_ros::AprilTagDetectionArray>();
+        if (s4 != NULL && m.getTopic() == "/tag_detections") {
+            // Loop through each detection (they have the same timestamp)
+            for(const apriltags_ros::AprilTagDetection& tag : s4->detections) {
+                vector<double> temp = vector<double>();
+                temp.push_back(m.getTime().toSec());
+                //todo figure out why i need to do this with the ID
+                double idt = tag.id;
+                temp.push_back(idt);
+                temp.push_back(tag.size);
+                temp.push_back(tag.pose.pose.orientation.x);
+                temp.push_back(tag.pose.pose.orientation.y);
+                temp.push_back(tag.pose.pose.orientation.z);
+                temp.push_back(tag.pose.pose.orientation.w);
+                temp.push_back(tag.pose.pose.position.x);
+                temp.push_back(tag.pose.pose.position.y);
+                temp.push_back(tag.pose.pose.position.z);
+                dataAPRIl.push_back(temp);
+            }
+        }
 
     }
 
+    // Debug message
     ROS_INFO("Done processing bag");
 
     // ====================================================================
@@ -225,6 +248,40 @@ int main(int argc, char **argv) {
     // Cleanup
     mxDestroyArray(pa1);
     ROS_INFO("Done processing ODOM data");
+
+
+    // ====================================================================
+    // ==========             APRIL DATA                 ==================
+    // ====================================================================
+    pa1 = mxCreateDoubleMatrix(dataAPRIl.size(),10,mxREAL);
+    if (pa1 == NULL) {
+        printf("%s : Out of memory on line %d\n", __FILE__, __LINE__);
+        printf("Unable to create mxArray.\n");
+        return(EXIT_FAILURE);
+    }
+    // Correctly copy data over (column-wise)
+    pt1 = mxGetPr(pa1);
+    for(size_t i=0; i<dataAPRIl.size(); i++) {
+        pt1[i] = dataAPRIl.at(i).at(0);
+        pt1[i + 1*dataAPRIl.size()] = dataAPRIl.at(i).at(1);
+        pt1[i + 2*dataAPRIl.size()] = dataAPRIl.at(i).at(2);
+        pt1[i + 3*dataAPRIl.size()] = dataAPRIl.at(i).at(3);
+        pt1[i + 4*dataAPRIl.size()] = dataAPRIl.at(i).at(4);
+        pt1[i + 5*dataAPRIl.size()] = dataAPRIl.at(i).at(5);
+        pt1[i + 6*dataAPRIl.size()] = dataAPRIl.at(i).at(6);
+        pt1[i + 7*dataAPRIl.size()] = dataAPRIl.at(i).at(7);
+        pt1[i + 8*dataAPRIl.size()] = dataAPRIl.at(i).at(8);
+        pt1[i + 9*dataAPRIl.size()] = dataAPRIl.at(i).at(9);
+    }
+    // Add it to the matlab mat file
+    status = matPutVariable(pmat, "data_april", pa1);
+    if(status != 0) {
+        printf("%s :  Error using matPutVariable on line %d\n", __FILE__, __LINE__);
+        return(EXIT_FAILURE);
+    }
+    // Cleanup
+    mxDestroyArray(pa1);
+    ROS_INFO("Done processing APRILTAG data");
 
 
     // Close the mat file
