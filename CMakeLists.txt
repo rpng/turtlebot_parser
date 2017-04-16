@@ -11,18 +11,16 @@ find_package(Eigen3 REQUIRED)
 find_package(Boost REQUIRED COMPONENTS system filesystem thread date_time)
 find_package(OpenCV 3 REQUIRED core videoio imgcodecs)
 find_package(Matlab 3 REQUIRED)
-#add_subdirectory(thirdparty/zlib/)
-#add_subdirectory(thirdparty/cvmatio/)
 
 
 # Find catkin (the ROS build system)
-find_package(catkin REQUIRED COMPONENTS roscpp nav_msgs std_msgs sensor_msgs nav_msgs image_transport cv_bridge tf rosbag)
+find_package(catkin REQUIRED COMPONENTS roscpp nav_msgs std_msgs sensor_msgs nav_msgs image_transport cv_bridge tf rosbag apriltags_ros)
 
 
 # Describe catkin Project
 catkin_package(
         DEPENDS Eigen3 Boost OpenCV
-        CATKIN_DEPENDS roscpp nav_msgs std_msgs sensor_msgs nav_msgs image_transport cv_bridge tf rosbag
+        CATKIN_DEPENDS roscpp nav_msgs std_msgs sensor_msgs nav_msgs image_transport cv_bridge tf rosbag apriltags_ros
         INCLUDE_DIRS src
 )
 
@@ -51,8 +49,6 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g3  -Wall")
 # Include our header files
 include_directories(
         src
-#        ${cvmatio_SOURCE_DIR}
-#        ${zlib_SOURCE_DIR}
         ${EIGEN3_INCLUDE_DIR}
         ${Boost_INCLUDE_DIRS}
         ${OpenCV_INCLUDE_DIRS}
@@ -62,8 +58,6 @@ include_directories(
 
 # Set link libraries used by all binaries
 list(APPEND parser_libraries
-#        cvmatio
-#        zlib
         ${Boost_LIBRARIES}
         ${OpenCV_LIBRARIES}
         ${MATLAB_LIBRARIES}
